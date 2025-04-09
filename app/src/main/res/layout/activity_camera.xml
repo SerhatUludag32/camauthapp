@@ -37,6 +37,14 @@
             android:textColor="@android:color/white" />
 
         <Button
+            android:id="@+id/btnClearOverlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Clear"
+            android:textSize="12sp"
+            android:layout_marginEnd="8dp" />
+
+        <Button
             android:id="@+id/btnLogout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

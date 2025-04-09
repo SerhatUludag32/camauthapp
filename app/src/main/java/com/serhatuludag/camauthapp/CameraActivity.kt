@@ -1,8 +1,11 @@
 package com.serhatuludag.camauthapp
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Base64
 import android.util.Log
 import android.view.Gravity
@@ -10,6 +13,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
@@ -20,12 +24,15 @@ import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
 import com.serhatuludag.camauthapp.api.AppWebSocketClient
 import com.serhatuludag.camauthapp.data.model.OverlayMessage
+import com.serhatuludag.camauthapp.data.model.OverlayData
+import com.serhatuludag.camauthapp.service.OverlayService
 import com.serhatuludag.camauthapp.databinding.ActivityCameraBinding
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import okhttp3.Request
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import android.os.Parcelable
 
 class CameraActivity : AppCompatActivity() {
 
@@ -33,6 +40,39 @@ class CameraActivity : AppCompatActivity() {
     private lateinit var app: AccessCodeApplication
     private lateinit var cameraExecutor: ExecutorService
     private var webSocketClient: AppWebSocketClient? = null
+
+    private val overlayPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (Settings.canDrawOverlays(this)) {
+                // Permission granted, continue with app initialization
+                initializeApp()
+            } else {
+                // Permission still not granted, show message and finish
+                Toast.makeText(this, "Overlay permission is required for this feature", Toast.LENGTH_LONG).show()
+                finish()
+            }
+        }
+    }
+
+    private fun initializeApp() {
+        // Check camera permissions and start camera
+        if (allPermissionsGranted()) {
+            startCamera()
+            // Connect to WebSocket
+            connectWebSocket()
+
+            // Setup logout button
+            binding.btnLogout.setOnClickListener {
+                logout()
+            }
+        } else {
+            ActivityCompat.requestPermissions(
+                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS
+            )
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,21 +82,24 @@ class CameraActivity : AppCompatActivity() {
         app = application as AccessCodeApplication
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        // Check permissions and start camera
-        if (allPermissionsGranted()) {
-            startCamera()
-        } else {
-            ActivityCompat.requestPermissions(
-                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS
-            )
+        // Setup clear button
+        binding.btnClearOverlay.setOnClickListener {
+            clearOverlay()
         }
 
-        // Connect to WebSocket
-        connectWebSocket()
-
-        // Setup logout button
-        binding.btnLogout.setOnClickListener {
-            logout()
+        // Check overlay permission first
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:$packageName")
+                )
+                overlayPermissionLauncher.launch(intent)
+            } else {
+                initializeApp()
+            }
+        } else {
+            initializeApp()
         }
     }
 
@@ -144,85 +187,99 @@ class CameraActivity : AppCompatActivity() {
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
                 startCamera()
+                connectWebSocket()
             } else {
-                Toast.makeText(this, "Permissions not granted by the user.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Camera permission is required", Toast.LENGTH_SHORT).show()
                 finish()
             }
         }
     }
 
+    private fun clearOverlay() {
+        // Clear the overlay in the app
+        binding.overlayContainer.removeAllViews()
+        
+        // Stop the overlay service
+        val serviceIntent = Intent(this, OverlayService::class.java).apply {
+            action = OverlayService.ACTION_HIDE_OVERLAY
+        }
+        startService(serviceIntent)
+    }
+
     private fun onOverlayReceived(overlay: OverlayMessage) {
         Log.d(TAG, "Overlay received: ${overlay.data.type}")
-        Log.d(TAG, "Raw overlay data: ${overlay.data}")
+        Log.d(TAG, "Overlay content length: ${overlay.data.content.length}")
+        Log.d(TAG, "Overlay position: x=${overlay.data.positionX}, y=${overlay.data.positionY}")
+        Log.d(TAG, "Overlay dimensions: width=${overlay.data.width}, height=${overlay.data.height}")
 
+        // Show in our app's camera view only
         runOnUiThread {
-            // Clear previous overlays
-            binding.overlayContainer.removeAllViews()
+            try {
+                // Clear previous overlays
+                binding.overlayContainer.removeAllViews()
 
-            // Get screen dimensions
-            val displayMetrics = resources.displayMetrics
-            val screenWidth = displayMetrics.widthPixels
-            val screenHeight = displayMetrics.heightPixels
+                // Get screen dimensions
+                val displayMetrics = resources.displayMetrics
+                val screenWidth = displayMetrics.widthPixels
+                val screenHeight = displayMetrics.heightPixels
 
-            // Calculate position and dimensions based on screen dimensions
-            // Scale from 0-1000 range to actual screen dimensions
-            val x = ((overlay.data.positionX / 1000f) * screenWidth).toInt()
-            val y = ((overlay.data.positionY / 1000f) * screenHeight).toInt()
-            val width = ((overlay.data.width / 1000f) * screenWidth).toInt()
-            val height = ((overlay.data.height / 1000f) * screenHeight).toInt()
+                Log.d(TAG, "Screen dimensions: width=$screenWidth, height=$screenHeight")
 
-            Log.d(TAG, "Screen dimensions - Width: $screenWidth, Height: $screenHeight")
-            Log.d(TAG, "Raw values - X: ${overlay.data.positionX}, Y: ${overlay.data.positionY}, Width: ${overlay.data.width}, Height: ${overlay.data.height}")
-            Log.d(TAG, "Calculated position - X: $x, Y: $y, Width: $width, Height: $height")
+                // Calculate position and dimensions based on screen dimensions
+                val x = ((overlay.data.positionX / 1000f) * screenWidth).toInt()
+                val y = ((overlay.data.positionY / 1000f) * screenHeight).toInt()
+                val width = ((overlay.data.width / 1000f) * screenWidth).toInt()
+                val height = ((overlay.data.height / 1000f) * screenHeight).toInt()
 
-            // Calculate margins to position the overlay
-            // For X: 400 means 40% from left
-            // For Y: 400 means 40% from top
-            val leftMargin = x
-            val topMargin = y
+                Log.d(TAG, "Calculated dimensions: x=$x, y=$y, width=$width, height=$height")
 
-            Log.d(TAG, "Final margins - Left: $leftMargin, Top: $topMargin")
-
-            val params = FrameLayout.LayoutParams(
-                width,
-                height
-            ).apply {
-                // Set position using absolute coordinates
-                gravity = Gravity.NO_GRAVITY
-                setMargins(leftMargin, topMargin, 0, 0)
-            }
-
-            when(overlay.data.type) {
-                "text" -> {
-                    val textView = TextView(this).apply {
-                        text = overlay.data.content
-                        layoutParams = params
-                        setTextColor(ContextCompat.getColor(this@CameraActivity, android.R.color.white))
-                        setBackgroundColor(ContextCompat.getColor(this@CameraActivity, android.R.color.black))
-                    }
-                    binding.overlayContainer.addView(textView)
+                val params = FrameLayout.LayoutParams(
+                    width,
+                    height
+                ).apply {
+                    gravity = Gravity.NO_GRAVITY
+                    setMargins(x, y, 0, 0)
                 }
-                "image" -> {
-                    try {
-                        val imageView = androidx.appcompat.widget.AppCompatImageView(this).apply {
+
+                when(overlay.data.type) {
+                    "text" -> {
+                        val textView = TextView(this).apply {
+                            text = overlay.data.content
                             layoutParams = params
-                            scaleType = android.widget.ImageView.ScaleType.FIT_XY
+                            setTextColor(ContextCompat.getColor(this@CameraActivity, android.R.color.white))
+                            setBackgroundColor(ContextCompat.getColor(this@CameraActivity, android.R.color.black))
                         }
+                        binding.overlayContainer.addView(textView)
+                        Log.d(TAG, "Text overlay added to container")
+                    }
+                    "image" -> {
+                        try {
+                            val imageView = androidx.appcompat.widget.AppCompatImageView(this).apply {
+                                layoutParams = params
+                                scaleType = android.widget.ImageView.ScaleType.FIT_XY
+                            }
 
-                        val imageBytes = Base64.decode(overlay.data.content, Base64.DEFAULT)
-                        Glide.with(this)
-                            .load(imageBytes)
-                            .into(imageView)
+                            val imageBytes = Base64.decode(overlay.data.content, Base64.DEFAULT)
+                            Log.d(TAG, "Image bytes decoded, length: ${imageBytes.size}")
 
-                        binding.overlayContainer.addView(imageView)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error displaying image overlay", e)
-                        showError("Failed to display image overlay")
+                            Glide.with(this)
+                                .load(imageBytes)
+                                .into(imageView)
+
+                            binding.overlayContainer.addView(imageView)
+                            Log.d(TAG, "Image overlay added to container")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error displaying image overlay", e)
+                            showError("Failed to display image overlay: ${e.message}")
+                        }
+                    }
+                    else -> {
+                        Log.e(TAG, "Unknown overlay type: ${overlay.data.type}")
                     }
                 }
-                else -> {
-                    Log.e(TAG, "Unknown overlay type: ${overlay.data.type}")
-                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in onOverlayReceived", e)
+                showError("Error displaying overlay: ${e.message}")
             }
         }
     }
@@ -240,6 +297,10 @@ class CameraActivity : AppCompatActivity() {
             .setPositiveButton("Yes") { _, _ ->
                 // Disconnect WebSocket
                 webSocketClient?.disconnect()
+
+                // Stop overlay service
+                val serviceIntent = Intent(this, OverlayService::class.java)
+                stopService(serviceIntent)
 
                 // Clear session data
                 app.sessionManager.clearSession()
@@ -260,6 +321,9 @@ class CameraActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "CameraActivity"
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
+        private const val REQUEST_CODE_OVERLAY = 11
+        private val REQUIRED_PERMISSIONS = arrayOf(
+            Manifest.permission.CAMERA
+        )
     }
 }
