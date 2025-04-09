@@ -12,8 +12,8 @@ class ApiClient(private val context: Context) {
 
     companion object {
         // For production server
-        private const val BASE_URL = "https://your-server-domain.com/"
-        private const val WS_URL = "wss://your-server-domain.com/ws/"
+        private const val BASE_URL = "https://camauthapp.onrender.com/"
+        private const val WS_URL = "wss://camauthapp.onrender.com/ws/"
 
         // For local development
         // private const val BASE_URL = "http://192.168.56.31:8000/"

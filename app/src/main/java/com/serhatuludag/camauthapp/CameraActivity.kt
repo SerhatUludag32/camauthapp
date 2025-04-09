@@ -63,7 +63,7 @@ class CameraActivity : AppCompatActivity() {
     private fun connectWebSocket() {
         val sessionId = intent.getStringExtra("sessionId") ?: return
         val token = intent.getStringExtra("token") ?: return
-        val wsUrl = "ws://192.168.56.31:8000/ws/$sessionId?token=$token"
+        val wsUrl = "wss://camauthapp.onrender.com/ws/$sessionId?token=$token"
         
         val request = Request.Builder()
             .url(wsUrl)
