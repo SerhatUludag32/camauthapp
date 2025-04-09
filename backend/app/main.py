@@ -8,6 +8,7 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from pydantic import BaseModel
+import os
 
 app = FastAPI()
 
@@ -20,9 +21,12 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+# Get the directory of the current file
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
 # Serve static files and templates
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
+app.mount("/static", StaticFiles(directory=os.path.join(current_dir, "static")), name="static")
+templates = Jinja2Templates(directory=os.path.join(current_dir, "templates"))
 
 # In-memory storage (replace with database in production)
 active_sessions: Dict[str, dict] = {}  # session_id -> session_data
