@@ -1,4 +1,4 @@
-name: Deploy to Heroku
+name: Deploy to Render
 
 on:
   push:
@@ -20,10 +20,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
           
-      - name: Deploy to Heroku
-        uses: akhileshns/heroku-deploy@v3.12.12
+      - name: Deploy to Render
+        uses: render-actions/deploy@v1
         with:
-          heroku_api_key: ${{secrets.HEROKU_API_KEY}}
-          heroku_app_name: "camauthapp"
-          heroku_email: "serhatuludag32@gmail.com"
-          justlogin: true 
+          service-id: ${{ secrets.RENDER_SERVICE_ID }}
+          api-key: ${{ secrets.RENDER_API_KEY }} 
