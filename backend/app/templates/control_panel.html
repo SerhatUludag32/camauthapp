@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Control Panel</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 10px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .preview-container {
+            width: 100%;
+            height: 300px;
+            border: 1px solid #ccc;
+            position: relative;
+            margin: 15px 0;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+
+        .overlay-preview {
+            position: absolute;
+            border: 2px dashed #333;
+            background-color: rgba(255, 255, 255, 0.5);
+            cursor: move;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #333;
+            border-radius: 4px;
+        }
+
+        .slider-container {
+            margin: 10px 0;
+        }
+
+        .slider-group {
+            margin-bottom: 10px;
+        }
+
+        .slider-label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        .value-display {
+            display: inline-block;
+            min-width: 40px;
+            text-align: right;
+            color: #666;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .type-section {
+            display: none;
+            margin: 10px 0;
+        }
+
+        .type-section.active {
+            display: block;
+        }
+
+        #sendOverlay {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+
+        #sendOverlay:hover {
+            background-color: #45a049;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                max-width: 500px;
+                padding: 20px;
+            }
+
+            .preview-container {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Camera Control Panel</h1>
+        
+        <div class="form-group">
+            <label for="sessionId">Session ID:</label>
+            <input type="text" id="sessionId" placeholder="Enter session ID">
+        </div>
+
+        <div class="form-group">
+            <label for="overlayType">Overlay Type:</label>
+            <select id="overlayType">
+                <option value="text">Text</option>
+                <option value="image">Image</option>
+            </select>
+        </div>
+
+        <div id="textSection" class="type-section active">
+            <div class="form-group">
+                <label for="textContent">Text Content:</label>
+                <input type="text" id="textContent" placeholder="Enter text">
+            </div>
+        </div>
+
+        <div id="imageSection" class="type-section">
+            <div class="form-group">
+                <label for="imageFile">Image:</label>
+                <input type="file" id="imageFile" accept="image/*">
+            </div>
+            <div id="imagePreview" style="max-width: 200px; max-height: 200px; margin: 10px 0;"></div>
+        </div>
+
+        <div class="preview-container" id="previewContainer">
+            <div class="overlay-preview" id="overlayPreview">
+                Preview
+            </div>
+        </div>
+
+        <div class="slider-container">
+            <div class="slider-group">
+                <label class="slider-label">Position X: <span id="positionXValue" class="value-display">500</span></label>
+                <input type="range" id="positionX" min="0" max="1000" value="500">
+            </div>
+            <div class="slider-group">
+                <label class="slider-label">Position Y: <span id="positionYValue" class="value-display">500</span></label>
+                <input type="range" id="positionY" min="0" max="1000" value="500">
+            </div>
+            <div class="slider-group">
+                <label class="slider-label">Width: <span id="widthValue" class="value-display">200</span></label>
+                <input type="range" id="width" min="50" max="1000" value="200">
+            </div>
+            <div class="slider-group">
+                <label class="slider-label">Height: <span id="heightValue" class="value-display">200</span></label>
+                <input type="range" id="height" min="50" max="1000" value="200">
+            </div>
+        </div>
+
+        <button id="sendOverlay">Send Overlay</button>
+    </div>
+
+    <script>
+        const overlayType = document.getElementById('overlayType');
+        const textSection = document.getElementById('textSection');
+        const imageSection = document.getElementById('imageSection');
+        const imageFile = document.getElementById('imageFile');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewContainer = document.getElementById('previewContainer');
+        const overlayPreview = document.getElementById('overlayPreview');
+        const positionX = document.getElementById('positionX');
+        const positionY = document.getElementById('positionY');
+        const width = document.getElementById('width');
+        const height = document.getElementById('height');
+        const positionXValue = document.getElementById('positionXValue');
+        const positionYValue = document.getElementById('positionYValue');
+        const widthValue = document.getElementById('widthValue');
+        const heightValue = document.getElementById('heightValue');
+        const sendOverlay = document.getElementById('sendOverlay');
+
+        // Handle type change
+        overlayType.addEventListener('change', () => {
+            textSection.classList.toggle('active', overlayType.value === 'text');
+            imageSection.classList.toggle('active', overlayType.value === 'image');
+            updatePreview();
+        });
+
+        // Handle image upload
+        imageFile.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreview.innerHTML = `<img src="${e.target.result}" class="preview-image">`;
+                    updatePreview();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Update preview when sliders change
+        [positionX, positionY, width, height].forEach(slider => {
+            slider.addEventListener('input', () => {
+                updatePreview();
+                updateSliderValues();
+            });
+        });
+
+        function updateSliderValues() {
+            positionXValue.textContent = positionX.value;
+            positionYValue.textContent = positionY.value;
+            widthValue.textContent = width.value;
+            heightValue.textContent = height.value;
+        }
+
+        function updatePreview() {
+            const type = overlayType.value;
+            const x = (positionX.value / 1000) * previewContainer.clientWidth;
+            const y = (positionY.value / 1000) * previewContainer.clientHeight;
+            const w = (width.value / 1000) * previewContainer.clientWidth;
+            const h = (height.value / 1000) * previewContainer.clientHeight;
+
+            overlayPreview.style.left = `${x}px`;
+            overlayPreview.style.top = `${y}px`;
+            overlayPreview.style.width = `${w}px`;
+            overlayPreview.style.height = `${h}px`;
+
+            if (type === 'text') {
+                overlayPreview.textContent = document.getElementById('textContent').value || 'Preview';
+            } else if (type === 'image' && imagePreview.firstChild) {
+                overlayPreview.innerHTML = imagePreview.innerHTML;
+            }
+        }
+
+        // Make preview draggable
+        let isDragging = false;
+        let startX, startY, initialLeft, initialTop;
+
+        overlayPreview.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            initialLeft = overlayPreview.offsetLeft;
+            initialTop = overlayPreview.offsetTop;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            const newLeft = initialLeft + dx;
+            const newTop = initialTop + dy;
+
+            // Convert pixel position back to 0-1000 range
+            positionX.value = Math.round((newLeft / previewContainer.clientWidth) * 1000);
+            positionY.value = Math.round((newTop / previewContainer.clientHeight) * 1000);
+
+            updatePreview();
+            updateSliderValues();
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        // Send overlay
+        sendOverlay.addEventListener('click', async () => {
+            const sessionId = document.getElementById('sessionId').value;
+            if (!sessionId) {
+                alert('Please enter a session ID');
+                return;
+            }
+
+            const type = overlayType.value;
+            let content;
+
+            if (type === 'text') {
+                content = document.getElementById('textContent').value;
+                if (!content) {
+                    alert('Please enter text content');
+                    return;
+                }
+            } else if (type === 'image') {
+                const file = imageFile.files[0];
+                if (!file) {
+                    alert('Please select an image');
+                    return;
+                }
+                content = await readFileAsBase64(file);
+            }
+
+            const overlayData = {
+                type: type,
+                content: content,
+                width: parseInt(width.value),
+                height: parseInt(height.value),
+                position_x: parseInt(positionX.value),
+                position_y: parseInt(positionY.value)
+            };
+
+            try {
+                const response = await fetch(`/api/overlay/${sessionId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(overlayData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                alert('Overlay sent successfully!');
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to send overlay: ' + error.message);
+            }
+        });
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Initial update
+        updatePreview();
+        updateSliderValues();
+    </script>
+</body>
+</html> 
