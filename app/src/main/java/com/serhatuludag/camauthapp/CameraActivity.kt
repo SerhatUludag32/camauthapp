@@ -63,11 +63,10 @@ class CameraActivity : AppCompatActivity() {
     private fun connectWebSocket() {
         val sessionId = intent.getStringExtra("sessionId") ?: return
         val token = intent.getStringExtra("token") ?: return
-        val wsUrl = "ws://10.0.2.2:8000/ws/$sessionId"
+        val wsUrl = "ws://192.168.56.31:8000/ws/$sessionId?token=$token"
         
         val request = Request.Builder()
             .url(wsUrl)
-            .addHeader("Authorization", "Bearer $token")
             .build()
             
         webSocketClient = AppWebSocketClient(request, object : AppWebSocketClient.OverlayWebSocketListener {

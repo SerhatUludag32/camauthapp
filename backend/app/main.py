@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, Set, Optional
+from typing import Dict, Set, Optional, List
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -41,9 +41,27 @@ class OverlayData(BaseModel):
     position_x: int = 0
     position_y: int = 0
 
+class SessionInfo(BaseModel):
+    session_id: str
+    device_info: dict
+    created_at: datetime
+    is_connected: bool
+
 @app.get("/", response_class=HTMLResponse)
 async def get_control_panel(request: Request):
     return templates.TemplateResponse("control_panel.html", {"request": request})
+
+@app.get("/api/sessions", response_model=List[SessionInfo])
+async def get_active_sessions():
+    sessions = []
+    for session_id, session_data in active_sessions.items():
+        sessions.append(SessionInfo(
+            session_id=session_id,
+            device_info=session_data["device_info"],
+            created_at=session_data["created_at"],
+            is_connected=session_id in active_connections
+        ))
+    return sessions
 
 @app.post("/api/auth/validate")
 async def validate_access_code(request: AccessCodeValidationRequest):
@@ -61,6 +79,8 @@ async def validate_access_code(request: AccessCodeValidationRequest):
         "token": token
     }
     
+    print(f"New session created: {session_id} for device: {request.device_info}")
+    
     return {
         "token": token,
         "sessionId": session_id
@@ -72,8 +92,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         await websocket.close(code=4001, reason="Invalid session")
         return
     
+    # Get the token from the query parameters
+    token = websocket.query_params.get("token")
+    if not token or token != active_sessions[session_id]["token"]:
+        await websocket.close(code=4003, reason="Invalid token")
+        return
+    
     await websocket.accept()
     active_connections[session_id] = websocket
+    print(f"WebSocket connected: {session_id}")
     
     try:
         while True:
@@ -83,6 +110,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     except WebSocketDisconnect:
         if session_id in active_connections:
             del active_connections[session_id]
+            print(f"WebSocket disconnected: {session_id}")
 
 @app.post("/api/overlay/{session_id}")
 async def send_overlay(session_id: str, overlay: OverlayData):
@@ -114,4 +142,5 @@ async def startup_event():
         if data["created_at"] < expired
     ]
     for session_id in expired_sessions:
-        del active_sessions[session_id] 
+        del active_sessions[session_id]
+        print(f"Cleaned up expired session: {session_id}") 

@@ -11,13 +11,13 @@ import java.util.concurrent.TimeUnit
 class ApiClient(private val context: Context) {
 
     companion object {
-        // For emulator (pointing to localhost on your machine)
-        private const val BASE_URL = "http://10.0.2.2:8000/"
-        private const val WS_URL = "ws://10.0.2.2:8000/ws/"
+        // For production server
+        private const val BASE_URL = "https://your-server-domain.com/"
+        private const val WS_URL = "wss://your-server-domain.com/ws/"
 
-        // For physical device, use your computer's IP address
-        // private const val BASE_URL = "http://192.168.1.XXX:8000/"
-        // private const val WS_URL = "ws://192.168.1.XXX:8000/ws/"
+        // For local development
+        // private const val BASE_URL = "http://192.168.56.31:8000/"
+        // private const val WS_URL = "ws://192.168.56.31:8000/ws/"
     }
 
     private fun createOkHttpClient(): OkHttpClient {
