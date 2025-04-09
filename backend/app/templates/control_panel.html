@@ -284,6 +284,8 @@
             startY = e.clientY;
             initialLeft = overlayPreview.offsetLeft;
             initialTop = overlayPreview.offsetTop;
+            overlayPreview.style.cursor = 'grabbing';
+            e.preventDefault(); // Prevent text selection while dragging
         });
 
         document.addEventListener('mousemove', (e) => {
@@ -292,20 +294,84 @@
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
 
-            const newLeft = initialLeft + dx;
-            const newTop = initialTop + dy;
+            let newLeft = initialLeft + dx;
+            let newTop = initialTop + dy;
+
+            // Keep the overlay within the preview container bounds
+            newLeft = Math.max(0, Math.min(newLeft, previewContainer.clientWidth - overlayPreview.offsetWidth));
+            newTop = Math.max(0, Math.min(newTop, previewContainer.clientHeight - overlayPreview.offsetHeight));
+
+            // Update position immediately for smooth dragging
+            overlayPreview.style.left = `${newLeft}px`;
+            overlayPreview.style.top = `${newTop}px`;
 
             // Convert pixel position back to 0-1000 range
             positionX.value = Math.round((newLeft / previewContainer.clientWidth) * 1000);
             positionY.value = Math.round((newTop / previewContainer.clientHeight) * 1000);
 
-            updatePreview();
             updateSliderValues();
         });
 
         document.addEventListener('mouseup', () => {
-            isDragging = false;
+            if (isDragging) {
+                isDragging = false;
+                overlayPreview.style.cursor = 'move';
+                updatePreview(); // Final position update
+            }
         });
+
+        // Add touch support for mobile devices
+        overlayPreview.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            const touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            initialLeft = overlayPreview.offsetLeft;
+            initialTop = overlayPreview.offsetTop;
+            overlayPreview.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+
+            const touch = e.touches[0];
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+
+            let newLeft = initialLeft + dx;
+            let newTop = initialTop + dy;
+
+            // Keep the overlay within the preview container bounds
+            newLeft = Math.max(0, Math.min(newLeft, previewContainer.clientWidth - overlayPreview.offsetWidth));
+            newTop = Math.max(0, Math.min(newTop, previewContainer.clientHeight - overlayPreview.offsetHeight));
+
+            // Update position immediately for smooth dragging
+            overlayPreview.style.left = `${newLeft}px`;
+            overlayPreview.style.top = `${newTop}px`;
+
+            // Convert pixel position back to 0-1000 range
+            positionX.value = Math.round((newLeft / previewContainer.clientWidth) * 1000);
+            positionY.value = Math.round((newTop / previewContainer.clientHeight) * 1000);
+
+            updateSliderValues();
+            e.preventDefault();
+        });
+
+        document.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                overlayPreview.style.cursor = 'move';
+                updatePreview(); // Final position update
+            }
+        });
+
+        // Prevent default touch behaviors that might interfere with dragging
+        document.addEventListener('touchstart', (e) => {
+            if (e.target === overlayPreview) {
+                e.preventDefault();
+            }
+        }, { passive: false });
 
         // Send overlay
         sendOverlay.addEventListener('click', async () => {
